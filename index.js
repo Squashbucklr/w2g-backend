@@ -129,6 +129,7 @@ app.get('/startlobby', function(req, res) {
         time: 0,
         update: moment().valueOf(),
         elevated: "",
+        sap: null,
         expire: null
     };
     setClearLobbyTimeout(lobbyid);
@@ -147,6 +148,7 @@ function send(tows, str) {
 
 app.ws('/lobby', async function(ws, req) {
     let lobbyid = req.query.id;
+    let sap = req.query.sap;
     let mpv = req.query.mpv == 'true';
     let connectionid = randomstring.generate({
         length: 16,
@@ -182,10 +184,11 @@ app.ws('/lobby', async function(ws, req) {
 
     console.log('User ' + connectionid + ' has connected to lobby ' + lobbyid);
     if (mpv) console.log('    this user is an mpv user');
-    computeHost(lobbyid);
+    computeHost(lobbyid, sap, connectionid);
     sendToAll(lobbyid, sendConnections);
     sendVideo(lobbyid, connectionid);
     sendElevated(lobbyid, connectionid);
+    sendSap(lobbyid, connectionid);
 
     ws.on('close', function() {
         let username = lobbies[lobbyid].connections[connectionid].username;
@@ -219,9 +222,31 @@ app.ws('/lobby', async function(ws, req) {
                 break;
             case 'elevate':
                 if (lobbies[lobbyid].connections[connectionid].host) {
-                    console.log('elevate', data.code);
-                    lobbies[lobbyid].elevated = data.code;
+                    console.log('elevate', data.key);
+                    lobbies[lobbyid].elevated = data.key;
                     sendToAll(lobbyid, sendElevated)
+                }
+                break;
+            case 'sap':
+                if (lobbies[lobbyid].connections[connectionid].host) {
+                    if (lobbies[lobbyid].sap) {
+                        if (lobbies[lobbyid].sap == data.key) {
+                            lobbies[lobbyid].sap = null;
+                            console.log('sap disabled');
+                        } else {
+                            console.log('illegal sap disable');
+                        }
+                    } else {
+                        if (data.key && data.key.length > 0) {
+                            lobbies[lobbyid].sap = data.key
+                            console.log('sap enabled ' + data.key);
+                        } else {
+                            console.log('no sap key provided');
+                        }
+                    }
+                    sendToAll(lobbyid, sendSap)
+                    computeHost(lobbyid);
+                    sendToAll(lobbyid, sendConnections);
                 }
                 break;
             case 'url':
@@ -253,6 +278,7 @@ app.ws('/lobby', async function(ws, req) {
             case 'host':
                 if (lobbies[lobbyid].connections[connectionid].host) {
                     if (data.connectionid == connectionid) break;
+                    if (lobbies[lobbyid].sap) break;
                     let connectionids = Object.keys(lobbies[lobbyid].connections);
                     let minnum = lobbies[lobbyid].connections[connectionids[0]].number;
                     for (let i = 0; i < connectionids.length; i++) {
@@ -330,23 +356,45 @@ function sendToAll(lobbyid, sendFunction) {
     }
 }
 
-function computeHost(lobbyid) {
+function computeHost(lobbyid, sap, sapconnectionid) {
     let connectionids = Object.keys(lobbies[lobbyid].connections);
     if(connectionids.length <= 0) return;
     let hasmin = false;
     let minnumber = lobbies[lobbyid].connections[connectionids[0]].number;
     let minid = connectionids[0];
+    let former = null;
     for (let i = 0; i < connectionids.length; i++) {
         if (!hasmin || minnumber > lobbies[lobbyid].connections[connectionids[i]].number) {
             minnumber = lobbies[lobbyid].connections[connectionids[i]].number;
             minid = connectionids[i];
         }
         if (!lobbies[lobbyid].connections[connectionids[i]].mpv) hasmin = true;
+        if (lobbies[lobbyid].connections[connectionids[i]].host) former = connectionids[i];
         lobbies[lobbyid].connections[connectionids[i]].host = false;
     }
-    if (hasmin) {
-        console.log(minid + ' is the host of lobby ' + lobbyid);
-        lobbies[lobbyid].connections[minid].host = true;
+
+    if (lobbies[lobbyid].sap) {
+        if (sap && lobbies[lobbyid].sap == sap) {
+            lobbies[lobbyid].connections[sapconnectionid].number = minnumber - 1;
+            lobbies[lobbyid].connections[sapconnectionid].host = true;
+            console.log(sapconnectionid + ' sapped host of lobby ' + lobbyid);
+        } else {
+            if (former) {
+                lobbies[lobbyid].connections[former].host = true;
+                console.log(former + ' retains host of sap-enabled lobby ' + lobbyid);
+            } else if (hasmin) {
+                console.log('sap prevented host for lobby ' + lobbyid);
+            } else {
+                console.log('no available host for sap-enabled lobby ' + lobbyid);
+            }
+        }
+    } else {
+        if (hasmin) {
+            lobbies[lobbyid].connections[minid].host = true;
+            console.log(minid + ' is the host of lobby ' + lobbyid);
+        } else {
+            console.log('no available host for lobby ' + lobbyid);
+        }
     }
 }
 
@@ -390,6 +438,14 @@ async function sendElevated(lobbyid, connectionid) {
     send(lobbies[lobbyid].connections[connectionid].ws, JSON.stringify({
         type: 'elevated',
         elevated
+    })); 
+}
+
+async function sendSap(lobbyid, connectionid) {
+    let sapped = !!(lobbies[lobbyid].sap);
+    send(lobbies[lobbyid].connections[connectionid].ws, JSON.stringify({
+        type: 'sap',
+        sapped
     })); 
 }
 

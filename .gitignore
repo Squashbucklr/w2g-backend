@@ -5,4 +5,4 @@ private
 public
 w2g.zip
 page/oldlobby.html
-*/*.swp
+**/*.swp
