@@ -1,0 +1,21 @@
+{
+  "name": "watch2gether",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.17.3",
+    "express-ws": "^4.0.0",
+    "moment": "^2.29.1",
+    "path": "^0.12.7",
+    "randomstring": "^1.1.5"
+  },
+  "scripts": {
+    "start": "node .",
+    "pm2": "pm2 start npm --time --name \"w2g\" -- start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
