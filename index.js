@@ -8,6 +8,13 @@ const moment = require('moment');
 
 const cors = require('cors');
 
+const files = {
+    private_media: process.env.W2G_PRIVATE_DIR || '/private',
+    public_media:  process.env.W2G_PUBLIC_DIR  || '/public',
+    lobby:         process.env.W2G_LOBBY_DIR   || '/lobby',
+    config:        process.env.W2G_CONFIG_DIR  || '/config'
+};
+
 const app = express();
  
 var expressWs = require('express-ws')(app);
@@ -19,7 +26,7 @@ let lobbies = {}; // all data
 
 async function getAccessData() {
     let json = await new Promise((resolve, reject) => {
-        fs.readFile(path.join(__dirname, 'access.json'), 'utf8', (err, data) => {
+        fs.readFile(path.join(files.config, 'access.json'), 'utf8', (err, data) => {
             if(err) reject(err);
             else resolve(data);
         });
@@ -48,7 +55,7 @@ app.get('/', function(req, res) {
     res.sendFile(path.join(__dirname, 'page/home.html'));
 });
 
-app.use('/lobby', express.static(path.join(__dirname, "frontend")));
+app.use('/lobby', express.static(files.lobby));
 
 app.use('/public', cors(), async function(req, res, next) {
     console.log('Request made to public file:');
@@ -56,7 +63,7 @@ app.use('/public', cors(), async function(req, res, next) {
     console.log('    from: ' + req.ip);
     console.log('    to:   ' + req.path);
     next();
-}, express.static(path.join(__dirname, 'public')));
+}, express.static(files.public_media));
 
 app.use('/private', cors(), async function(req, res, next) {
     console.log('Request made to private file:');
@@ -100,7 +107,7 @@ app.use('/private', cors(), async function(req, res, next) {
     console.log('    serving 403.');
     res.status(403);
     res.send('403 Forbidden');
-}, express.static(path.join(__dirname, 'private')));
+}, express.static(files.private_media));
 
 // deprecated legacy routes
 
@@ -121,6 +128,12 @@ app.get('/startlobby', function(req, res) {
         capitalization: 'uppercase'
     });
 
+    createLobby(lobbyid);
+
+    res.redirect('/lobby?id=' + lobbyid);
+});
+
+function createLobby(lobbyid) {
     lobbies[lobbyid] = {
         connections: {},
         url: "",
@@ -136,9 +149,7 @@ app.get('/startlobby', function(req, res) {
 
     console.log('Established a new lobby: ' + lobbyid);
     listLobbies();
-
-    res.redirect('/lobby?id=' + lobbyid);
-});
+}
 
 function send(tows, str) {
     if (tows.readyState == 1) {
@@ -157,11 +168,12 @@ app.ws('/lobby', async function(ws, req) {
     });
 
     if (lobbies[lobbyid] == undefined) {
-        send(ws, JSON.stringify({
+        /* send(ws, JSON.stringify({
             type: "invalid"
         }));
         ws.close();
-        return;
+        return;*/
+        createLobby(lobbyid);
     }
 
     let maxnum = 0;
