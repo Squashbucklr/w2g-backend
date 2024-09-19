@@ -14,7 +14,8 @@
   "scripts": {
     "start": "node .",
     "pm2": "pm2 start npm --time --name \"w2g\" -- start",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "docker": "docker build --tag node-docker-w2g ."
   },
   "author": "",
   "license": "ISC"
